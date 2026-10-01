@@ -58,9 +58,6 @@ jobs:
             SCENE_DURATION=$(awk \
               "BEGIN {print $DURATION / 3}")
 
-            echo "Voice duration: $DURATION seconds"
-            echo "Scene duration: $SCENE_DURATION seconds"
-
             ffmpeg -y \
               -loop 1 -t "$SCENE_DURATION" -i "visual-$i-1.jpg" \
               -loop 1 -t "$SCENE_DURATION" -i "visual-$i-2.jpg" \
@@ -90,13 +87,26 @@ jobs:
             echo "Short #$i finished."
           done
 
+      - name: Verify finished Shorts
+        run: |
+          set -e
+
+          for i in 1 2 3 4 5 6 7
+          do
+            if [ ! -f "beyond-the-blink-short-$i.mp4" ]; then
+              echo "❌ Missing Short #$i"
+              exit 1
+            fi
+
+            echo "✅ Short #$i ready"
+          done
+
       - name: Save finished Shorts
         run: |
           git config user.name "Beyond the Blink Bot"
           git config user.email "beyondtheblink.creator@gmail.com"
 
-          git add \
-            beyond-the-blink-short-*.mp4
+          git add beyond-the-blink-short-*.mp4
 
           git commit \
             -m "Add finished Beyond the Blink Shorts" \
@@ -104,9 +114,33 @@ jobs:
 
           git push
 
+      - name: Upload and schedule Shorts
+        env:
+          UPLOAD_KEY: ${{ secrets.BEYOND_BLINK_UPLOAD_KEY }}
+        run: |
+          set -e
+
+          for i in 1 2 3 4 5 6 7
+          do
+            echo ""
+            echo "=============================="
+            echo "Uploading Short #$i"
+            echo "=============================="
+
+            RESPONSE=$(curl \
+              --fail-with-body \
+              --silent \
+              --show-error \
+              "https://beyond-the-blink.beyondtheblink-creator.workers.dev/upload?key=${UPLOAD_KEY}&i=${i}")
+
+            echo "$RESPONSE"
+
+            sleep 5
+          done
+
       - name: Save Short artifacts
         uses: actions/upload-artifact@v4
         with:
           name: beyond-the-blink-shorts
           path: beyond-the-blink-short-*.mp4
-          if-no-files-found: ignore
+          if-no-files-found: error
