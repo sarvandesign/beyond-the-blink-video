@@ -11,10 +11,14 @@ jobs:
       - name: Install FFmpeg
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg
+          sudo apt-get install -y ffmpeg jq
 
       - name: Download repository files
         uses: actions/checkout@v4
+
+      - name: Decode AI voice
+        run: |
+          jq -r '.audio' script-1.mp3 | base64 -d > script-1.wav
 
       - name: Create video with AI voice
         run: |
@@ -22,7 +26,7 @@ jobs:
             -loop 1 -t 5 -i scene1.jpg \
             -loop 1 -t 5 -i scene2.jpg \
             -loop 1 -t 5 -i scene3.jpg \
-            -i voice1.mp3 \
+            -i script-1.wav \
             -filter_complex "
               [0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps=30[v1];
               [1:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps=30[v2];
