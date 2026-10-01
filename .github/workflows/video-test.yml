@@ -1,10 +1,10 @@
-name: Build Short #1
+name: Build Beyond the Blink Short
 
 on:
   workflow_dispatch:
 
 jobs:
-  build-video:
+  build-short:
     runs-on: ubuntu-latest
 
     steps:
@@ -13,15 +13,27 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg
 
-      - name: Download repository files
+      - name: Download project files
         uses: actions/checkout@v4
 
-      - name: Create Short #1
+      - name: Check source files
+        run: |
+          ls -lh visual-1.jpg visual-2.jpg visual-3.jpg voice-1.wav
+
+      - name: Get voice duration
+        run: |
+          DURATION=$(ffprobe -v error -show_entries format=duration -of csv=p=0 voice-1.wav)
+          SCENE_DURATION=$(awk "BEGIN {print $DURATION / 3}")
+          echo "Voice duration: $DURATION seconds"
+          echo "Each visual duration: $SCENE_DURATION seconds"
+          echo "SCENE_DURATION=$SCENE_DURATION" >> $GITHUB_ENV
+
+      - name: Create final Short
         run: |
           ffmpeg -y \
-            -loop 1 -t 5 -i visual-1.jpg \
-            -loop 1 -t 5 -i visual-2.jpg \
-            -loop 1 -t 5 -i visual-3.jpg \
+            -loop 1 -t "$SCENE_DURATION" -i visual-1.jpg \
+            -loop 1 -t "$SCENE_DURATION" -i visual-2.jpg \
+            -loop 1 -t "$SCENE_DURATION" -i visual-3.jpg \
             -i voice-1.wav \
             -filter_complex "
               [0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps=30[v1];
@@ -32,15 +44,19 @@ jobs:
             -map "[outv]" \
             -map 3:a:0 \
             -c:v libx264 \
-            -c:a aac \
-            -b:a 192k \
+            -preset medium \
+            -crf 20 \
             -pix_fmt yuv420p \
             -r 30 \
+            -c:a aac \
+            -b:a 192k \
+            -ar 44100 \
+            -ac 2 \
             -shortest \
             -movflags +faststart \
             beyond-the-blink-short-1.mp4
 
-      - name: Save finished Short
+      - name: Save final Short
         uses: actions/upload-artifact@v4
         with:
           name: beyond-the-blink-short-1
