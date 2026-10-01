@@ -20,13 +20,24 @@ jobs:
         run: |
           jq -r '.audio' script-1.mp3 | base64 -d > script-1.wav
 
+      - name: Convert voice to AAC
+        run: |
+          ffmpeg -y \
+            -i script-1.wav \
+            -vn \
+            -c:a aac \
+            -b:a 192k \
+            -ar 44100 \
+            -ac 2 \
+            script-1.m4a
+
       - name: Create video with AI voice
         run: |
-          ffmpeg \
+          ffmpeg -y \
             -loop 1 -t 5 -i scene1.jpg \
             -loop 1 -t 5 -i scene2.jpg \
             -loop 1 -t 5 -i scene3.jpg \
-            -i script-1.wav \
+            -i script-1.m4a \
             -filter_complex "
               [0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps=30[v1];
               [1:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps=30[v2];
@@ -34,7 +45,7 @@ jobs:
               [v1][v2][v3]concat=n=3:v=1:a=0[outv]
             " \
             -map "[outv]" \
-            -map 3:a \
+            -map 3:a:0 \
             -c:v libx264 \
             -c:a aac \
             -b:a 192k \
