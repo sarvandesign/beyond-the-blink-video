@@ -1,4 +1,4 @@
-name: Video Test
+name: Build Short #1
 
 on:
   workflow_dispatch:
@@ -11,33 +11,18 @@ jobs:
       - name: Install FFmpeg
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg jq
+          sudo apt-get install -y ffmpeg
 
       - name: Download repository files
         uses: actions/checkout@v4
 
-      - name: Decode AI voice
-        run: |
-          jq -r '.audio' script-1.mp3 | base64 -d > script-1.wav
-
-      - name: Convert voice to AAC
+      - name: Create Short #1
         run: |
           ffmpeg -y \
-            -i script-1.wav \
-            -vn \
-            -c:a aac \
-            -b:a 192k \
-            -ar 44100 \
-            -ac 2 \
-            script-1.m4a
-
-      - name: Create video with AI voice
-        run: |
-          ffmpeg -y \
-            -loop 1 -t 5 -i scene1.jpg \
-            -loop 1 -t 5 -i scene2.jpg \
-            -loop 1 -t 5 -i scene3.jpg \
-            -i script-1.m4a \
+            -loop 1 -t 5 -i visual-1.jpg \
+            -loop 1 -t 5 -i visual-2.jpg \
+            -loop 1 -t 5 -i visual-3.jpg \
+            -i voice-1.wav \
             -filter_complex "
               [0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps=30[v1];
               [1:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps=30[v2];
@@ -53,10 +38,10 @@ jobs:
             -r 30 \
             -shortest \
             -movflags +faststart \
-            test-short.mp4
+            beyond-the-blink-short-1.mp4
 
-      - name: Save complete test Short
+      - name: Save finished Short
         uses: actions/upload-artifact@v4
         with:
-          name: beyond-the-blink-complete-short
-          path: test-short.mp4
+          name: beyond-the-blink-short-1
+          path: beyond-the-blink-short-1.mp4
