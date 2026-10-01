@@ -3,6 +3,9 @@ name: Build Beyond the Blink Short
 on:
   workflow_dispatch:
 
+  repository_dispatch:
+    types: [build_short]
+
 permissions:
   contents: write
 
