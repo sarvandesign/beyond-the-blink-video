@@ -1,4 +1,4 @@
-name: Build Beyond the Blink Short
+name: Build Beyond the Blink Shorts
 
 on:
   workflow_dispatch:
@@ -24,65 +24,89 @@ jobs:
 
       - name: Check source files
         run: |
-          ls -lh visual-1.jpg visual-2.jpg visual-3.jpg voice-1.wav
+          echo "Checking available Short assets..."
+          find . -maxdepth 1 -type f \
+            \( -name "visual-*.jpg" -o -name "voice-*.wav" \) \
+            -print | sort
 
-      - name: Get voice duration
+      - name: Build Shorts
         run: |
-          DURATION=$(ffprobe -v error -show_entries format=duration -of csv=p=0 voice-1.wav)
-          SCENE_DURATION=$(awk "BEGIN {print $DURATION / 3}")
-          echo "Voice duration: $DURATION seconds"
-          echo "Each visual duration: $SCENE_DURATION seconds"
-          echo "SCENE_DURATION=$SCENE_DURATION" >> $GITHUB_ENV
+          set -e
 
-      - name: Create final Short
-        run: |
-          ffmpeg -y \
-            -loop 1 -t "$SCENE_DURATION" -i visual-1.jpg \
-            -loop 1 -t "$SCENE_DURATION" -i visual-2.jpg \
-            -loop 1 -t "$SCENE_DURATION" -i visual-3.jpg \
-            -i voice-1.wav \
-            -filter_complex "
-              [0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps=30[v1];
-              [1:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps=30[v2];
-              [2:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps=30[v3];
-              [v1][v2][v3]concat=n=3:v=1:a=0[outv]
-            " \
-            -map "[outv]" \
-            -map 3:a:0 \
-            -c:v libx264 \
-            -preset medium \
-            -crf 20 \
-            -pix_fmt yuv420p \
-            -r 30 \
-            -c:a aac \
-            -b:a 192k \
-            -ar 44100 \
-            -ac 2 \
-            -shortest \
-            -movflags +faststart \
-            beyond-the-blink-short-1.mp4
+          for i in 1 2 3 4 5 6 7
+          do
+            echo ""
+            echo "=============================="
+            echo "Building Short #$i"
+            echo "=============================="
 
-      - name: Save final Short as GitHub file
+            if [ ! -f "visual-$i-1.jpg" ] || \
+               [ ! -f "visual-$i-2.jpg" ] || \
+               [ ! -f "visual-$i-3.jpg" ] || \
+               [ ! -f "voice-$i.wav" ]
+            then
+              echo "Assets for Short #$i are not ready yet."
+              continue
+            fi
+
+            DURATION=$(ffprobe \
+              -v error \
+              -show_entries format=duration \
+              -of csv=p=0 \
+              "voice-$i.wav")
+
+            SCENE_DURATION=$(awk \
+              "BEGIN {print $DURATION / 3}")
+
+            echo "Voice duration: $DURATION seconds"
+            echo "Scene duration: $SCENE_DURATION seconds"
+
+            ffmpeg -y \
+              -loop 1 -t "$SCENE_DURATION" -i "visual-$i-1.jpg" \
+              -loop 1 -t "$SCENE_DURATION" -i "visual-$i-2.jpg" \
+              -loop 1 -t "$SCENE_DURATION" -i "visual-$i-3.jpg" \
+              -i "voice-$i.wav" \
+              -filter_complex "
+                [0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps=30[v1];
+                [1:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps=30[v2];
+                [2:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps=30[v3];
+                [v1][v2][v3]concat=n=3:v=1:a=0[outv]
+              " \
+              -map "[outv]" \
+              -map 3:a:0 \
+              -c:v libx264 \
+              -preset medium \
+              -crf 20 \
+              -pix_fmt yuv420p \
+              -r 30 \
+              -c:a aac \
+              -b:a 192k \
+              -ar 44100 \
+              -ac 2 \
+              -shortest \
+              -movflags +faststart \
+              "beyond-the-blink-short-$i.mp4"
+
+            echo "Short #$i finished."
+          done
+
+      - name: Save finished Shorts
         run: |
           git config user.name "Beyond the Blink Bot"
           git config user.email "beyondtheblink.creator@gmail.com"
-          git add beyond-the-blink-short-1.mp4
-          git commit -m "Add finished Short #1" || echo "No changes to commit"
+
+          git add \
+            beyond-the-blink-short-*.mp4
+
+          git commit \
+            -m "Add finished Beyond the Blink Shorts" \
+            || echo "No changes to commit"
+
           git push
 
-      - name: Upload finished Short to YouTube
-        env:
-          YOUTUBE_UPLOAD_KEY: ${{ secrets.YOUTUBE_UPLOAD_KEY }}
-        run: |
-          sleep 10
-
-          curl --fail-with-body \
-            --get \
-            --data-urlencode "key=$YOUTUBE_UPLOAD_KEY" \
-            "https://beyond-the-blink.beyondtheblink-creator.workers.dev/upload"
-
-      - name: Save final Short artifact
+      - name: Save Short artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: beyond-the-blink-short-1
-          path: beyond-the-blink-short-1.mp4
+          name: beyond-the-blink-shorts
+          path: beyond-the-blink-short-*.mp4
+          if-no-files-found: ignore
