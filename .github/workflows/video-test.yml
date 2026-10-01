@@ -16,12 +16,13 @@ jobs:
       - name: Download repository files
         uses: actions/checkout@v4
 
-      - name: Create video from 3 AI visuals
+      - name: Create video with AI voice
         run: |
           ffmpeg \
             -loop 1 -t 5 -i scene1.jpg \
             -loop 1 -t 5 -i scene2.jpg \
             -loop 1 -t 5 -i scene3.jpg \
+            -i voice1.mp3 \
             -filter_complex "
               [0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps=30[v1];
               [1:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps=30[v2];
@@ -29,14 +30,18 @@ jobs:
               [v1][v2][v3]concat=n=3:v=1:a=0[outv]
             " \
             -map "[outv]" \
+            -map 3:a \
             -c:v libx264 \
+            -c:a aac \
+            -b:a 192k \
             -pix_fmt yuv420p \
             -r 30 \
+            -shortest \
             -movflags +faststart \
             test-short.mp4
 
-      - name: Save test video
+      - name: Save complete test Short
         uses: actions/upload-artifact@v4
         with:
-          name: beyond-the-blink-3-scene-video
+          name: beyond-the-blink-complete-short
           path: test-short.mp4
