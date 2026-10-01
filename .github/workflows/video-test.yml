@@ -70,6 +70,17 @@ jobs:
           git commit -m "Add finished Short #1" || echo "No changes to commit"
           git push
 
+      - name: Upload finished Short to YouTube
+        env:
+          YOUTUBE_UPLOAD_KEY: ${{ secrets.YOUTUBE_UPLOAD_KEY }}
+        run: |
+          sleep 10
+
+          curl --fail-with-body \
+            --get \
+            --data-urlencode "key=$YOUTUBE_UPLOAD_KEY" \
+            "https://beyond-the-blink.beyondtheblink-creator.workers.dev/upload"
+
       - name: Save final Short artifact
         uses: actions/upload-artifact@v4
         with:
