@@ -15,10 +15,10 @@ jobs:
 
       - name: Create test video
         run: |
-          ffmpeg -f lavfi -i color=c=black:s=1080x1920:d=5 \
-            -c:v libx264 \
-            -pix_fmt yuv420p \
-            test-short.mp4
+         ffmpeg -f lavfi -i testsrc2=size=1080x1920:rate=30:duration=5 \
+      -c:v libx264 \
+      -pix_fmt yuv420p \
+      test-short.mp4
 
       - name: Save test video
         uses: actions/upload-artifact@v4
