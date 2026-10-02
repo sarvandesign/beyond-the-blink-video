@@ -28,7 +28,7 @@ jobs:
               --show-error \
               "https://beyond-the-blink.beyondtheblink-creator.workers.dev/visual-next?key=${VISUAL_KEY}&chat=6160845469"
 
-            sleep 40
+            sleep 180
           done
 
           echo "All visual-generation requests sent."
