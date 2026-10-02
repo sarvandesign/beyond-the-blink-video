@@ -1,0 +1,34 @@
+name: Generate Beyond the Blink Visuals
+
+on:
+  repository_dispatch:
+    types: [generate_visuals]
+
+permissions:
+  contents: read
+
+jobs:
+  generate-visuals:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Generate 7 Shorts visuals
+        env:
+          VISUAL_KEY: ${{ secrets.BEYOND_BLINK_UPLOAD_KEY }}
+        run: |
+          set -e
+
+          for i in 1 2 3 4 5 6 7
+          do
+            echo "Generating visuals for Short #$i"
+
+            curl \
+              --fail-with-body \
+              --silent \
+              --show-error \
+              "https://beyond-the-blink.beyondtheblink-creator.workers.dev/visual-next?key=${VISUAL_KEY}&chat=6160845469"
+
+            sleep 40
+          done
+
+          echo "All visual-generation requests sent."
