@@ -46,7 +46,7 @@ jobs:
               --fail-with-body \
               --silent \
               --show-error \
-              "https://beyond-the-blink.beyondtheblink-creator.workers.dev/visual-next?key=${VISUAL_KEY}&chat=YOUR_TELEGRAM_CHAT_ID"
+              "https://beyond-the-blink.beyondtheblink-creator.workers.dev/visual-next?key=${VISUAL_KEY}&chat=6160845469"
 
             sleep 5
           done
