@@ -17,12 +17,32 @@ jobs:
       - name: Generate 7 Shorts visuals
         env:
           VISUAL_KEY: ${{ secrets.BEYOND_BLINK_UPLOAD_KEY }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -e
 
+          REPO="sarvandesign/beyond-the-blink-video"
+
           for i in 1 2 3 4 5 6 7
           do
-            echo "Generating visuals for Short #$i"
+            echo ""
+            echo "=============================="
+            echo "Checking Short #$i"
+            echo "=============================="
+
+            if curl \
+              --silent \
+              --fail \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${REPO}/contents/visual-${i}-3.jpg" \
+              > /dev/null
+            then
+              echo "✅ Short #$i visuals already exist."
+              continue
+            fi
+
+            echo "🎨 Starting visual generation for Short #$i"
 
             curl \
               --fail-with-body \
@@ -30,7 +50,32 @@ jobs:
               --show-error \
               "https://beyond-the-blink.beyondtheblink-creator.workers.dev/visual-next?key=${VISUAL_KEY}&chat=6160845469"
 
-            sleep 180
+            echo "⏳ Waiting for Short #$i visuals..."
+
+            for attempt in $(seq 1 30)
+            do
+              if curl \
+                --silent \
+                --fail \
+                -H "Authorization: Bearer ${GH_TOKEN}" \
+                -H "Accept: application/vnd.github+json" \
+                "https://api.github.com/repos/${REPO}/contents/visual-${i}-3.jpg" \
+                > /dev/null
+              then
+                echo "✅ Short #$i visuals are ready."
+                break
+              fi
+
+              if [ "$attempt" -eq 30 ]
+              then
+                echo "❌ Timed out waiting for Short #$i visuals."
+                exit 1
+              fi
+
+              echo "Still generating... check $attempt/30"
+              sleep 30
+            done
           done
 
-          echo "All visual-generation requests sent."
+          echo ""
+          echo "🎬 All 7 Shorts visuals are ready."
