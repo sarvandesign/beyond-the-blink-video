@@ -25,31 +25,10 @@ jobs:
       - name: Check source files
         run: |
           echo "Checking available Short assets..."
+
           find . -maxdepth 1 -type f \
             \( -name "visual-*.jpg" -o -name "voice-*.wav" \) \
             -print | sort
-
-                  - name: Generate AI visuals
-        env:
-          VISUAL_KEY: ${{ secrets.BEYOND_BLINK_UPLOAD_KEY }}
-        run: |
-          set -e
-
-          for i in 1 2 3 4 5 6 7
-          do
-            echo ""
-            echo "=============================="
-            echo "Generating visuals for Short #$i"
-            echo "=============================="
-
-            curl \
-              --fail-with-body \
-              --silent \
-              --show-error \
-              "https://beyond-the-blink.beyondtheblink-creator.workers.dev/visual-next?key=${VISUAL_KEY}&chat=6160845469"
-
-            sleep 5
-          done
 
       - name: Build Shorts
         run: |
@@ -67,8 +46,8 @@ jobs:
                [ ! -f "visual-$i-3.jpg" ] || \
                [ ! -f "voice-$i.wav" ]
             then
-              echo "Assets for Short #$i are not ready yet."
-              continue
+              echo "❌ Assets for Short #$i are not ready."
+              exit 1
             fi
 
             DURATION=$(ffprobe \
@@ -106,12 +85,15 @@ jobs:
               -movflags +faststart \
               "beyond-the-blink-short-$i.mp4"
 
-            echo "Short #$i finished."
+            echo "✅ Short #$i finished."
           done
 
       - name: Verify finished Shorts
         run: |
           set -e
+
+          echo ""
+          echo "Checking all finished Shorts..."
 
           for i in 1 2 3 4 5 6 7
           do
