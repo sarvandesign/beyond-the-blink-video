@@ -29,6 +29,28 @@ jobs:
             \( -name "visual-*.jpg" -o -name "voice-*.wav" \) \
             -print | sort
 
+                  - name: Generate AI visuals
+        env:
+          VISUAL_KEY: ${{ secrets.BEYOND_BLINK_UPLOAD_KEY }}
+        run: |
+          set -e
+
+          for i in 1 2 3 4 5 6 7
+          do
+            echo ""
+            echo "=============================="
+            echo "Generating visuals for Short #$i"
+            echo "=============================="
+
+            curl \
+              --fail-with-body \
+              --silent \
+              --show-error \
+              "https://beyond-the-blink.beyondtheblink-creator.workers.dev/visual-next?key=${VISUAL_KEY}&chat=YOUR_TELEGRAM_CHAT_ID"
+
+            sleep 5
+          done
+
       - name: Build Shorts
         run: |
           set -e
