@@ -14,68 +14,50 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Generate 7 Shorts visuals
+      - name: Generate all 21 visuals
         env:
           VISUAL_KEY: ${{ secrets.BEYOND_BLINK_UPLOAD_KEY }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -e
 
-          REPO="sarvandesign/beyond-the-blink-video"
-
-          for i in 1 2 3 4 5 6 7
+          for short in 1 2 3 4 5 6 7
           do
-            echo ""
-            echo "=============================="
-            echo "Checking Short #$i"
-            echo "=============================="
-
-            if curl \
-              --silent \
-              --fail \
-              -H "Authorization: Bearer ${GH_TOKEN}" \
-              -H "Accept: application/vnd.github+json" \
-              "https://api.github.com/repos/${REPO}/contents/visual-${i}-3.jpg" \
-              > /dev/null
-            then
-              echo "✅ Short #$i visuals already exist."
-              continue
-            fi
-
-            echo "🎨 Starting visual generation for Short #$i"
-
-            curl \
-              --fail-with-body \
-              --silent \
-              --show-error \
-              "https://beyond-the-blink.beyondtheblink-creator.workers.dev/visual-next?key=${VISUAL_KEY}&chat=6160845469"
-
-            echo "⏳ Waiting for Short #$i visuals..."
-
-            for attempt in $(seq 1 30)
+            for visual in 1 2 3
             do
+              echo ""
+              echo "=============================="
+              echo "Generating Short #${short} Visual ${visual}/3"
+              echo "=============================="
+
               if curl \
                 --silent \
                 --fail \
-                -H "Authorization: Bearer ${GH_TOKEN}" \
-                -H "Accept: application/vnd.github+json" \
-                "https://api.github.com/repos/${REPO}/contents/visual-${i}-3.jpg" \
+                -H "Accept: application/json" \
+                "https://api.github.com/repos/sarvandesign/beyond-the-blink-video/contents/visual-${short}-${visual}.jpg" \
                 > /dev/null
               then
-                echo "✅ Short #$i visuals are ready."
-                break
+                echo "✅ Visual already exists. Skipping."
+                continue
               fi
 
-              if [ "$attempt" -eq 30 ]
-              then
-                echo "❌ Timed out waiting for Short #$i visuals."
-                exit 1
-              fi
+              RESPONSE=$(curl \
+                --fail-with-body \
+                --silent \
+                --show-error \
+                --get \
+                --data-urlencode "key=${VISUAL_KEY}" \
+                --data-urlencode "chat=6160845469" \
+                --data-urlencode "short=${short}" \
+                --data-urlencode "visual=${visual}" \
+                "https://beyond-the-blink.beyondtheblink-creator.workers.dev/visual-one")
 
-              echo "Still generating... check $attempt/30"
-              sleep 30
+              echo "$RESPONSE"
+
+              echo "✅ Short #${short} Visual ${visual} completed."
             done
           done
 
           echo ""
-          echo "🎬 All 7 Shorts visuals are ready."
+          echo "========================================"
+          echo "🎬 ALL 21 VISUALS ARE READY"
+          echo "========================================"
