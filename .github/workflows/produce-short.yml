@@ -1,0 +1,214 @@
+name: Make Beyond the Blink Short
+
+# Started by /make in Telegram (repository_dispatch "produce_short"),
+# or manually from the Actions tab.
+#
+# One Short per run:
+#   1. Tamil voice      → Worker /voice-one  → voice-N.wav
+#   2. 3 AI visuals     → Worker /visual-one → visual-N-1/2/3.jpg
+#   3. Video (FFmpeg)   → beyond-the-blink-short-N.mp4
+#   4. YouTube          → Worker /upload (scheduled 7 pm IST)
+#
+# from = "upload" skips steps 1–3 and only retries the upload.
+
+on:
+  repository_dispatch:
+    types: [produce_short]
+
+  workflow_dispatch:
+    inputs:
+      short:
+        description: "Short number (1-7)"
+        required: true
+        default: "1"
+      from:
+        description: "Start from"
+        required: true
+        default: voice
+        type: choice
+        options:
+          - voice
+          - upload
+
+permissions:
+  contents: write
+
+concurrency:
+  group: make-short
+  cancel-in-progress: false
+
+env:
+  WORKER: https://beyond-the-blink.beyondtheblink-creator.workers.dev
+  CHAT: "6160845469"
+  SHORT: ${{ github.event.client_payload.short || inputs.short }}
+  FROM: ${{ github.event.client_payload.from || inputs.from || 'voice' }}
+  WORKER_KEY: ${{ secrets.BEYOND_BLINK_UPLOAD_KEY }}
+
+jobs:
+  make-short:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Check request
+        run: |
+          case "$SHORT" in
+            1|2|3|4|5|6|7) ;;
+            *) echo "❌ Invalid Short number: '$SHORT'"; exit 1 ;;
+          esac
+
+          case "$FROM" in
+            voice|upload) ;;
+            *) echo "❌ Invalid start step: '$FROM'"; exit 1 ;;
+          esac
+
+          echo "🎬 Making Short #$SHORT (starting from: $FROM)"
+
+          cat > "$RUNNER_TEMP/worker.sh" <<'EOF'
+          # call_worker <attempts> <path> [--data-urlencode name=value ...]
+          call_worker() {
+            local attempts="$1" path="$2" attempt response
+            shift 2
+            for attempt in $(seq 1 "$attempts"); do
+              if response=$(curl --fail-with-body --silent --show-error \
+                  --max-time 290 --get \
+                  --data-urlencode "key=${WORKER_KEY}" \
+                  --data-urlencode "chat=${CHAT}" \
+                  "$@" "${WORKER}${path}"); then
+                echo "$response"
+                return 0
+              fi
+              echo "$response"
+              echo "⚠️ ${path} attempt ${attempt}/${attempts} failed."
+              if [ "$attempt" -lt "$attempts" ]; then
+                sleep 20
+              fi
+            done
+            return 1
+          }
+          EOF
+
+      - name: 1. Tamil voice
+        if: env.FROM == 'voice'
+        run: |
+          source "$RUNNER_TEMP/worker.sh"
+          call_worker 2 /voice-one --data-urlencode "short=${SHORT}"
+
+      - name: 2. AI visuals
+        if: env.FROM == 'voice'
+        run: |
+          source "$RUNNER_TEMP/worker.sh"
+          for visual in 1 2 3; do
+            echo "Visual ${visual}/3"
+            call_worker 2 /visual-one \
+              --data-urlencode "short=${SHORT}" \
+              --data-urlencode "visual=${visual}"
+          done
+
+      # Checks out main as it is NOW, so the voice and visuals the
+      # Worker just committed are included.
+      - name: Download latest files
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Install FFmpeg
+        if: env.FROM == 'voice'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+
+      - name: 3. Build video
+        if: env.FROM == 'voice'
+        run: |
+          VOICE="voice-${SHORT}.wav"
+          OUT="beyond-the-blink-short-${SHORT}.mp4"
+
+          for f in "visual-${SHORT}-1.jpg" "visual-${SHORT}-2.jpg" "visual-${SHORT}-3.jpg" "$VOICE"; do
+            if [ ! -f "$f" ]; then
+              echo "❌ Missing $f"
+              exit 1
+            fi
+          done
+
+          DURATION=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$VOICE")
+          FRAMES=$(awk -v d="$DURATION" 'BEGIN { print int(d * 30 / 3) + 2 }')
+          echo "Voice: ${DURATION}s → ${FRAMES} frames per scene"
+
+          # Fill a 9:16 frame (rendered at 2x for smooth motion),
+          # then slowly zoom: in, out, in.
+          COVER="scale=2160:3840:force_original_aspect_ratio=increase,crop=2160:3840"
+          PAN="x=iw/2-(iw/zoom/2):y=ih/2-(ih/zoom/2):d=${FRAMES}:s=1080x1920:fps=30"
+
+          ffmpeg -y -hide_banner -loglevel error -stats \
+            -i "visual-${SHORT}-1.jpg" \
+            -i "visual-${SHORT}-2.jpg" \
+            -i "visual-${SHORT}-3.jpg" \
+            -i "$VOICE" \
+            -filter_complex "
+              [0:v]${COVER},zoompan=z='1+0.12*on/${FRAMES}':${PAN},setsar=1[v1];
+              [1:v]${COVER},zoompan=z='1.12-0.12*on/${FRAMES}':${PAN},setsar=1[v2];
+              [2:v]${COVER},zoompan=z='1+0.15*on/${FRAMES}':${PAN},setsar=1[v3];
+              [v1][v2][v3]concat=n=3:v=1:a=0,format=yuv420p[outv]
+            " \
+            -map "[outv]" \
+            -map 3:a:0 \
+            -c:v libx264 -preset medium -crf 21 -r 30 \
+            -c:a aac -b:a 192k -ar 44100 -ac 2 \
+            -shortest \
+            -movflags +faststart \
+            "$OUT"
+
+          SIZE=$(ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=s=x:p=0 "$OUT")
+          LENGTH=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$OUT")
+          echo "✅ $OUT — ${SIZE}, ${LENGTH}s, $(du -h "$OUT" | cut -f1)"
+
+          if [ "$SIZE" != "1080x1920" ]; then
+            echo "❌ Unexpected video size: $SIZE"
+            exit 1
+          fi
+
+      - name: Save video to GitHub
+        if: env.FROM == 'voice'
+        run: |
+          git config user.name "Beyond the Blink Bot"
+          git config user.email "beyondtheblink.creator@gmail.com"
+
+          git add "beyond-the-blink-short-${SHORT}.mp4"
+          git commit -m "Add finished Short #${SHORT}" || echo "No changes to commit"
+
+          for attempt in 1 2 3; do
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+            echo "⚠️ Push failed — syncing with main and retrying..."
+            git pull --rebase origin main
+          done
+
+          echo "❌ Could not save the video to GitHub."
+          exit 1
+
+      - name: 4. Upload and schedule on YouTube
+        run: |
+          source "$RUNNER_TEMP/worker.sh"
+
+          if [ ! -f "beyond-the-blink-short-${SHORT}.mp4" ]; then
+            echo "❌ beyond-the-blink-short-${SHORT}.mp4 is not in the repo."
+            exit 1
+          fi
+
+          REF=$(git rev-parse HEAD)
+          call_worker 1 /upload \
+            --data-urlencode "i=${SHORT}" \
+            --data-urlencode "ref=${REF}"
+
+      - name: Tell Telegram it stopped
+        if: failure()
+        run: |
+          source "$RUNNER_TEMP/worker.sh" || exit 0
+          call_worker 1 /notify \
+            --data-urlencode "short=${SHORT}" \
+            --data-urlencode "status=failed" \
+            --data-urlencode "text=⛔ Short ${SHORT} stopped. Fix the error above, then send /make to continue. Details: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            || true
