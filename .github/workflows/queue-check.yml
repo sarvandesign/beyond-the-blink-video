@@ -1,1 +1,29 @@
+name: Beyond the Blink queue check
 
+# Hourly safety net. Normally each finished Short starts the next
+# approved idea by itself; this only starts one if something was
+# missed. It never starts anything while a Short is being made, and
+# stays quiet after an error until you send /make.
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check-queue:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Start the next approved Short if nothing is running
+        env:
+          WORKER_KEY: ${{ secrets.BEYOND_BLINK_UPLOAD_KEY }}
+        run: |
+          curl --fail-with-body --silent --show-error --max-time 60 --get \
+            --data-urlencode "key=${WORKER_KEY}" \
+            --data-urlencode "chat=6160845469" \
+            "https://beyond-the-blink.beyondtheblink-creator.workers.dev/tick"
