@@ -11,9 +11,10 @@ The updated Worker selects a random narrator from eight Gemini preset voices for
 3. Select `worker.js` in the editor. Click inside the code, press **Cmd+A**, and paste the complete replacement with **Cmd+V**.
 4. Click **Deploy**. Keep the existing secrets, KV namespace, and AI binding.
 5. Open https://beyond-the-blink.beyondtheblink-creator.workers.dev — it should include **Covers + voice rotation — 17 Nov 2026**.
-6. Approve the next fresh idea in Telegram. Check its voice name and, after processing, its cover in YouTube Studio.
+6. Open the accompanying GitHub pull request → **Merge pull request** → **Confirm merge**.
+7. Approve the next fresh idea in Telegram. Check its voice name and, after processing, its cover in YouTube Studio.
 
-No new API key is needed. GitHub's files are already updated; there is nothing to paste into GitHub. The original Worker is preserved in the earlier attachment; this repository also keeps version history.
+No new API key is needed. After deploying the Worker, merge the accompanying GitHub pull request to enable the updated workflow. There is nothing to paste into GitHub. The original Worker is preserved in the earlier attachment; this repository also keeps version history.
 
 ## What changes when
 
