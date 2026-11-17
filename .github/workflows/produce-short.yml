@@ -4,9 +4,10 @@ name: Make Beyond the Blink Short
 # (repository_dispatch "produce_short"), or manually from the Actions tab.
 #
 # One Short per run:
-#   0. Tamil script     → Worker /script-one
-#   1. Tamil voice      → Worker /voice-one  → voice-N.wav
-#   2. 3 AI visuals     → Worker /visual-one → visual-N-1/2/3.jpg
+#   0. Tamil story      → Worker /script-one  (6 beats)
+#   1. Tamil voice      → Worker /voice-one   → voice-N.wav
+#   2. Real video clips → scripts/build_segments.py finds one Pixabay clip
+#                         per beat (AI image only when nothing fits)
 #   3. Video (FFmpeg)   → beyond-the-blink-short-N.mp4, with Tamil captions
 #   4. YouTube          → Worker /upload (scheduled 7 pm IST),
 #                         which then starts the next approved idea
@@ -47,6 +48,7 @@ env:
   SHORT: ${{ github.event.client_payload.short || inputs.short }}
   FROM: ${{ github.event.client_payload.from || inputs.from || 'script' }}
   WORKER_KEY: ${{ secrets.BEYOND_BLINK_UPLOAD_KEY }}
+  PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
 
 jobs:
   make-short:
@@ -104,17 +106,6 @@ jobs:
           source "$RUNNER_TEMP/worker.sh"
           call_worker 2 /voice-one --data-urlencode "short=${SHORT}"
 
-      - name: 2. AI visuals
-        if: env.FROM != 'upload'
-        run: |
-          source "$RUNNER_TEMP/worker.sh"
-          for visual in 1 2 3; do
-            echo "Visual ${visual}/3"
-            call_worker 2 /visual-one \
-              --data-urlencode "short=${SHORT}" \
-              --data-urlencode "visual=${visual}"
-          done
-
       # Checks out main as it is NOW, so the voice and visuals the
       # Worker just committed are included.
       - name: Download latest files
@@ -147,17 +138,21 @@ jobs:
         run: |
           VOICE="voice-${SHORT}.wav"
           OUT="beyond-the-blink-short-${SHORT}.mp4"
+          SEGS="$RUNNER_TEMP/segments"
 
-          for f in "visual-${SHORT}-1.jpg" "visual-${SHORT}-2.jpg" "visual-${SHORT}-3.jpg" "$VOICE"; do
-            if [ ! -f "$f" ]; then
-              echo "❌ Missing $f"
-              exit 1
-            fi
-          done
+          if [ ! -f "$VOICE" ]; then
+            echo "❌ Missing $VOICE"
+            exit 1
+          fi
 
-          DURATION=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$VOICE")
-          FRAMES=$(awk -v d="$DURATION" 'BEGIN { print int(d * 30 / 3) + 2 }')
-          echo "Voice: ${DURATION}s → ${FRAMES} frames per scene"
+          # ---- Real video clips: one per story beat, cut to the narration ----
+          rm -rf "$SEGS"
+          python3 scripts/build_segments.py "$SHORT" "$VOICE" "$SEGS" used-clips.txt
+
+          # Join the clips without re-encoding them
+          ffmpeg -y -hide_banner -loglevel error \
+            -f concat -safe 0 -i "$SEGS/segments.txt" -c copy "$SEGS/joined.tmp.mp4"
+          mv "$SEGS/joined.tmp.mp4" "$SEGS/joined.mp4"
 
           # ---- Tamil captions (skipped with a warning if anything fails) ----
           cat > "$RUNNER_TEMP/captions.py" <<'PYEOF'
@@ -360,29 +355,30 @@ jobs:
             echo "⚠️ Captions skipped — building the video without them."
           fi
 
-          # Fill a 9:16 frame (rendered at 2x for smooth motion),
-          # then slowly zoom: in, out, in.
-          COVER="scale=2160:3840:force_original_aspect_ratio=increase,crop=2160:3840"
-          PAN="x=iw/2-(iw/zoom/2):y=ih/2-(ih/zoom/2):d=${FRAMES}:s=1080x1920:fps=30"
+          # Final pass: add the voice (and burn in the captions when we have them).
+          # Without captions the picture is copied, not re-encoded.
+          TMP_OUT="${OUT%.mp4}.tmp.mp4"
 
-          ffmpeg -y -hide_banner -loglevel error -stats \
-            -i "visual-${SHORT}-1.jpg" \
-            -i "visual-${SHORT}-2.jpg" \
-            -i "visual-${SHORT}-3.jpg" \
-            -i "$VOICE" \
-            -filter_complex "
-              [0:v]${COVER},zoompan=z='1+0.12*on/${FRAMES}':${PAN},setsar=1[v1];
-              [1:v]${COVER},zoompan=z='1.12-0.12*on/${FRAMES}':${PAN},setsar=1[v2];
-              [2:v]${COVER},zoompan=z='1+0.15*on/${FRAMES}':${PAN},setsar=1[v3];
-              [v1][v2][v3]concat=n=3:v=1:a=0${SUBS},format=yuv420p[outv]
-            " \
-            -map "[outv]" \
-            -map 3:a:0 \
-            -c:v libx264 -preset medium -crf 21 -r 30 \
-            -c:a aac -b:a 192k -ar 44100 -ac 2 \
-            -shortest \
-            -movflags +faststart \
-            "$OUT"
+          if [ -n "$SUBS" ]; then
+            ffmpeg -y -hide_banner -loglevel error -stats \
+              -i "$SEGS/joined.mp4" -i "$VOICE" \
+              -vf "ass=captions.ass:shaping=complex,format=yuv420p" \
+              -map 0:v -map 1:a \
+              -c:v libx264 -preset medium -crf 21 -r 30 \
+              -c:a aac -b:a 192k -ar 44100 -ac 2 \
+              -shortest -movflags +faststart \
+              "$TMP_OUT"
+          else
+            ffmpeg -y -hide_banner -loglevel error -stats \
+              -i "$SEGS/joined.mp4" -i "$VOICE" \
+              -map 0:v -map 1:a \
+              -c:v copy \
+              -c:a aac -b:a 192k -ar 44100 -ac 2 \
+              -shortest -movflags +faststart \
+              "$TMP_OUT"
+          fi
+
+          mv "$TMP_OUT" "$OUT"
 
           SIZE=$(ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=s=x:p=0 "$OUT")
           LENGTH=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$OUT")
@@ -400,6 +396,9 @@ jobs:
           git config user.email "beyondtheblink.creator@gmail.com"
 
           git add "beyond-the-blink-short-${SHORT}.mp4"
+          if [ -f used-clips.txt ]; then
+            git add used-clips.txt
+          fi
           git commit -m "Add finished Short #${SHORT}" || echo "No changes to commit"
 
           for attempt in 1 2 3; do
