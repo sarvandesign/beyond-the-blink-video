@@ -4,3 +4,9 @@ pixabay:9631 short-1 https://pixabay.com/videos/id-9631/
 pixabay:253997 short-1 https://pixabay.com/videos/id-253997/
 pixabay:203449 short-1 https://pixabay.com/videos/id-203449/
 pixabay:227128 short-1 https://pixabay.com/videos/id-227128/
+pixabay:155020 short-2 https://pixabay.com/videos/id-155020/
+pixabay:197405 short-2 https://pixabay.com/videos/id-197405/
+pixabay:249589 short-2 https://pixabay.com/videos/id-249589/
+pixabay:960 short-2 https://pixabay.com/videos/id-960/
+pixabay:253998 short-2 https://pixabay.com/videos/id-253998/
+pixabay:228847 short-2 https://pixabay.com/videos/id-228847/
