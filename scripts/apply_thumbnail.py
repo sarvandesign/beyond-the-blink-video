@@ -8,14 +8,19 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+USER_AGENT = "BeyondTheBlinkBot/1.0 (personal YouTube Shorts tool)"
+
 
 def main():
     short, ref = sys.argv[1:3]
     query = urllib.parse.urlencode({"key": os.environ["WORKER_KEY"], "short": short, "ref": ref})
     url = os.environ["WORKER"].rstrip("/") + "/thumbnail-one?" + query
+    request = urllib.request.Request(
+        url, headers={"User-Agent": USER_AGENT, "Accept": "application/json"}
+    )
     for attempt in range(20):
         try:
-            with urllib.request.urlopen(url, timeout=60) as response:
+            with urllib.request.urlopen(request, timeout=60) as response:
                 result = json.load(response)
             if result.get("status") == "done":
                 print("✅ YouTube thumbnail applied.")
@@ -39,3 +44,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

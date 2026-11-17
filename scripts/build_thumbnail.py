@@ -15,6 +15,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont, ImageOps, features
 
 WIDTH, HEIGHT = 1080, 1920
+USER_AGENT = "BeyondTheBlinkBot/1.0 (personal YouTube Shorts tool)"
 
 
 def font_file(family):
@@ -109,17 +110,34 @@ def render_cover(frame, title, output):
     print(f"Cover ready: {output.name} — {WIDTH}x{HEIGHT}")
 
 
-def main():
-    short, video, output = sys.argv[1:4]
-    query = urllib.parse.urlencode({"key": os.environ["WORKER_KEY"], "short": short})
-    request = urllib.request.Request(os.environ["WORKER"].rstrip("/") + "/script-beats?" + query)
+def story_title(short, video):
+    cached = Path(video).with_name("story.json")
+    if cached.is_file():
+        try:
+            return json.loads(cached.read_text(encoding="utf-8")).get("title", "")
+        except (OSError, ValueError, AttributeError):
+            pass
+    query = urllib.parse.urlencode({
+        "key": os.environ["WORKER_KEY"], "short": short,
+        "chat": os.environ.get("CHAT", ""),
+    })
+    # Match the successful footage downloader's client identification.
+    request = urllib.request.Request(
+        os.environ["WORKER"].rstrip("/") + "/script-beats?" + query,
+        headers={"User-Agent": USER_AGENT, "Accept": "application/json"},
+    )
     try:
         with urllib.request.urlopen(request, timeout=60) as response:
-            title = json.load(response).get("title", "")
+            return json.load(response).get("title", "")
     except urllib.error.HTTPError as error:
         raise RuntimeError(f"Could not get cover title (HTTP {error.code}).") from None
     except urllib.error.URLError:
         raise RuntimeError("Could not reach the Worker for the cover title.") from None
+
+
+def main():
+    short, video, output = sys.argv[1:4]
+    title = story_title(short, video)
     # joined.mp4 contains the real footage before captions are burned in.
     frame = subprocess.check_output([
         "ffmpeg", "-hide_banner", "-loglevel", "error", "-ss", "0.5", "-i", video,
@@ -130,3 +148,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

@@ -268,6 +268,10 @@ def main():
     if not beats:
         sys.exit("❌ The Worker returned no beats.")
 
+    # The cover uses this exact story's title without another Worker request.
+    (out_dir / "story.json").write_text(
+        json.dumps(story, ensure_ascii=False), encoding="utf-8")
+
     total = media_seconds(voice) + TAIL_SECONDS
     frames = plan_frames(beats, total)
     log(f"Voice {total - TAIL_SECONDS:.1f}s -> {len(beats)} beats, frames per beat: {frames}")
@@ -369,3 +373,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
